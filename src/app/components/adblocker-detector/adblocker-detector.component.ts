@@ -12,7 +12,7 @@ export class AdblockerDetectorComponent implements AfterViewInit {
   constructor() { }
 
   ngAfterViewInit(): void {
-    setTimeout(this.checkAdBlock, 3000)
+    this.checkAdBlock()
   }
 
   checkAdBlock(): void {
@@ -23,7 +23,6 @@ export class AdblockerDetectorComponent implements AfterViewInit {
       if (xhr.readyState === XMLHttpRequest.DONE) {
         const adsBlocked = xhr.status === 0 || xhr.responseURL !== ADS_URL;
         this.naughtyBoy = adsBlocked;
-        console.log(adsBlocked)
       }
     };
 
