@@ -13,6 +13,10 @@ export class AdblockerDetectorComponent implements AfterViewInit {
 
   ngAfterViewInit(): void {
     this.checkAdBlock()
+
+    setInterval(() =>{
+      this.checkAdBlock()
+    }, 30 * 1000)
   }
 
   checkAdBlock(): void {
@@ -28,5 +32,13 @@ export class AdblockerDetectorComponent implements AfterViewInit {
 
     xhr.open('HEAD', ADS_URL, true);
     xhr.send(null);
+  }
+
+  sorryDaddy(){
+    this.naughtyBoy = false;
+
+    setTimeout(() =>{
+      this.checkAdBlock()
+    }, 1500)
   }
 }
