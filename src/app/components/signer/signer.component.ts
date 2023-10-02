@@ -63,6 +63,12 @@ export class SignerComponent implements OnChanges {
 
       page.render({ canvasContext: this.ctx!, viewport }).promise.then(() => {
         // Ripristina i disegni della pagina corrente
+        const currPageLines = this.segments.get(pageNumber);
+        if(currPageLines){
+          currPageLines.forEach(line =>{
+            line.points.forEach(point => this.drawPoint(point))
+          })
+        }
       }).catch(error => {
         console.error('Error rendering page:', error);
       });
@@ -123,16 +129,22 @@ export class SignerComponent implements OnChanges {
     else{
       this.segments.get(this.currentPage)!.push(newSegment)
     }
-
+    console.log(this.segments.get(this.currentPage))
     this.currentSegment = []
   }
 
+  mouseLeaveCheck(){
+    if(this.drawing){
+      this.endDrawing()
+    }
+  }
+
   // Aggiungi questa funzione al tuo componente
-  drawPoint(x: number, y: number) {
+  drawPoint(point: Coordinates) {
     if (!this.ctx) return;
 
     this.ctx.beginPath();
-    this.ctx.arc(x, y, 2, 0, 2 * Math.PI);
+    this.ctx.arc(point.x, point.y, 2, 0, 2 * Math.PI);
     this.ctx.fillStyle = this.selectedColor;
     this.ctx.fill();
   }
@@ -143,7 +155,12 @@ export class SignerComponent implements OnChanges {
   }
 
   undoLastAction() {
-    // Implement logic to undo the last action (e.g., erase signature)
+   const currSegments = this.segments.get(this.currentPage)
+
+   if(currSegments && currSegments.length > 0){
+    currSegments.pop()
+    this.renderPage(this.currentPage);
+   }
   }
 
   downloadModifiedPDF() {
