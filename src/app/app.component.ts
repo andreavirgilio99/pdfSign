@@ -7,4 +7,11 @@ import { Component } from '@angular/core';
 })
 export class AppComponent {
   title = 'pdfSign';
+
+  pdfToSign?: File
+  openSigner = false;
+
+  fileCatcher(event: any){
+   this.pdfToSign = event.target.files[0]
+  }
 }
