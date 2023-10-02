@@ -1,28 +1,29 @@
 import { Component, ElementRef, Input, OnChanges, ViewChild } from '@angular/core';
 import * as pdfjsLib from 'pdfjs-dist';
 
+type Coordinates = {x: number, y: number}
+type Segment = {points: Coordinates[]}
+
 @Component({
   selector: 'app-signer',
   templateUrl: './signer.component.html',
   styleUrls: ['./signer.component.css']
 })
 export class SignerComponent implements OnChanges {
-
-  @Input()
-  pdfToSign!: File
-
+  @Input() pdfToSign!: File;
   @ViewChild('pdfCanvas') pdfCanvas!: ElementRef;
 
   pdfDoc: pdfjsLib.PDFDocumentProxy | null = null;
-  currentPage = 1; // Start from the first page
+  currentPage = 1;
   canvas: HTMLCanvasElement | null = null;
   ctx: CanvasRenderingContext2D | null = null;
-
-  pageDrawings: { [page: number]: { x: number, y: number }[] } = {};
   drawing = false;
   lastX = 0;
   lastY = 0;
   selectedColor = '#000000'; // Default color is black
+  segments = new Map<number, Segment[]>()
+
+  currentSegment: Coordinates[] = []
 
   constructor() {
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.0.279/pdf.worker.min.js"
@@ -61,7 +62,7 @@ export class SignerComponent implements OnChanges {
       this.canvas!.width = viewport.width;
 
       page.render({ canvasContext: this.ctx!, viewport }).promise.then(() => {
-        // Render successful
+        // Ripristina i disegni della pagina corrente
       }).catch(error => {
         console.error('Error rendering page:', error);
       });
@@ -70,39 +71,21 @@ export class SignerComponent implements OnChanges {
 
   goToPreviousPage() {
     if (this.currentPage > 1) {
-      this.pageDrawings[this.currentPage] = this.getDrawings(); // Salva i disegni della pagina corrente
       this.currentPage--;
       this.renderPage(this.currentPage);
-      this.restoreDrawings(this.currentPage); // Ripristina i disegni della nuova pagina
     }
   }
 
   goToNextPage() {
     if (this.pdfDoc && this.currentPage < this.pdfDoc.numPages) {
-      this.pageDrawings[this.currentPage] = this.getDrawings(); // Salva i disegni della pagina corrente
       this.currentPage++;
       this.renderPage(this.currentPage);
-      this.restoreDrawings(this.currentPage); // Ripristina i disegni della nuova pagina
-    }
-  }
-
-  // Metodo per ottenere i disegni della pagina corrente
-  private getDrawings(): { x: number, y: number }[] {
-    return this.pageDrawings[this.currentPage] || [];
-  }
-
-  // Metodo per ripristinare i disegni sulla pagina specificata
-  private restoreDrawings(pageNumber: number) {
-    const drawings = this.pageDrawings[pageNumber];
-    if (drawings) {
-      for (const point of drawings) {
-        this.drawPoint(point.x, point.y);
-      }
     }
   }
 
   // Start drawing
   startDrawing(event: MouseEvent) {
+    this.currentSegment = []
     this.drawing = true;
     const canvas = this.canvas!;
     this.lastX = event.offsetX;
@@ -116,27 +99,32 @@ export class SignerComponent implements OnChanges {
 
   draw(event: MouseEvent) {
     if (!this.drawing) return;
-
-    if (this.selectedColor === '#FFFFFF') {
-      // Se la gomma è selezionata, usa il colore di sfondo per cancellare
-      this.ctx!.globalCompositeOperation = 'destination-out';
-      this.ctx!.lineWidth = 5; // Imposta la larghezza della gomma
-    } else {
-      // Altrimenti, usa il colore selezionato per disegnare
-      this.ctx!.globalCompositeOperation = 'source-over';
-      this.ctx!.strokeStyle = this.selectedColor;
-      this.ctx!.lineWidth = 2; // Imposta la larghezza del tratto
-    }
+    //usa il colore selezionato per disegnare
+    this.ctx!.globalCompositeOperation = 'source-over';
+    this.ctx!.strokeStyle = this.selectedColor;
+    this.ctx!.lineWidth = 2; // Imposta la larghezza del tratto
 
     // Disegna il tratto
     this.ctx!.lineTo(event.offsetX, event.offsetY);
     this.ctx!.stroke();
+    this.currentSegment.push({x: event.offsetX, y: event.offsetY})
   }
 
   // Stop drawing
   endDrawing() {
     this.drawing = false;
     this.ctx!.closePath();
+    const clone = JSON.parse(JSON.stringify(this.currentSegment))
+    const newSegment: Segment = {points: clone}
+
+    if(this.segments.get(this.currentPage) == undefined){
+      this.segments.set(this.currentPage, [newSegment])
+    }
+    else{
+      this.segments.get(this.currentPage)!.push(newSegment)
+    }
+
+    this.currentSegment = []
   }
 
   // Aggiungi questa funzione al tuo componente
