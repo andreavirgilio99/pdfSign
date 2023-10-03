@@ -1,5 +1,6 @@
 import { Component, ElementRef, Input, OnChanges, ViewChild } from '@angular/core';
 import * as pdfjsLib from 'pdfjs-dist';
+import { saveAs } from 'file-saver';
 
 type Point = { x: number, y: number };
 type Segment = { points: Point[], color: string, width: number };
@@ -66,9 +67,7 @@ export class SignerComponent implements OnChanges {
         // Ripristina i disegni della pagina corrente
         const currPageLines = this.segments.get(pageNumber);
         if (currPageLines) {
-          currPageLines.forEach(line => {
-            line.points.forEach(point => this.drawPoint(point,line.color, line.width))
-          })
+          currPageLines.forEach(line => this.drawLine(line))
         }
       }).catch(error => {
         console.error('Error rendering page:', error);
@@ -106,22 +105,37 @@ export class SignerComponent implements OnChanges {
 
   draw(event: MouseEvent) {
     if (!this.drawing) return;
+
+    
+    //usa il colore selezionato per disegnare
+    this.ctx!.globalCompositeOperation = 'source-over';
+    this.ctx!.strokeStyle = this.selectedColor;
+    this.ctx!.lineWidth = this.selectedWidth; // Imposta la larghezza del tratto
   
+    // Disegna il tratto
     const x = event.offsetX;
     const y = event.offsetY;
   
-    // Usa il colore selezionato per disegnare
-    this.ctx!.globalCompositeOperation = 'source-over';
-    this.ctx!.strokeStyle = this.selectedColor;
-    this.ctx!.lineWidth = this.selectedWidth;
-  
-    // Disegna una linea continua tra i punti consecutivi
-    this.ctx!.lineTo(x, y);
-    this.ctx!.stroke();
-    this.ctx!.beginPath();
-    this.ctx!.moveTo(x, y);
-  
-    this.currentSegment.push({ x, y });
+    // Calcola la distanza tra il punto corrente e l'ultimo punto registrato
+    const dx = x - this.lastX;
+    const dy = y - this.lastY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    // Registra i punti ad ogni pixel di distanza
+    if (distance >= 2) {
+      const step = 1 / distance;
+      for (let t = 0; t < 1; t += step) {
+        const currentX = this.lastX + t * dx;
+        const currentY = this.lastY + t * dy;
+        this.ctx!.lineTo(currentX, currentY);
+        this.currentSegment.push({
+          x: currentX,
+          y: currentY,
+        });
+      }
+      this.ctx!.stroke()
+      this.lastX = x;
+      this.lastY = y;
+    }
   }
 
   // Stop drawing
@@ -137,7 +151,6 @@ export class SignerComponent implements OnChanges {
     else {
       this.segments.get(this.currentPage)!.push(newSegment)
     }
-    console.log(this.segments.get(this.currentPage))
     this.currentSegment = []
   }
 
@@ -146,15 +159,101 @@ export class SignerComponent implements OnChanges {
       this.endDrawing()
     }
   }
+  
+  async createModifiedPdf(originalPdfFile: File, drawings: Map<number, Segment[]>): Promise<void> {
+    try {
+      // Carica il PDF originale
+      const originalPdfData = await this.readFileAsArrayBuffer(originalPdfFile);
+      const pdfDoc = await pdfjsLib.getDocument({ data: originalPdfData }).promise;
+
+      // Crea un nuovo documento PDF
+      //const newPdfDoc = new pdfjsLib.PDFDocument();
+
+      // Per ogni pagina del PDF originale
+      for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+        const page = await pdfDoc.getPage(pageNum);
+
+        // Aggiungi una pagina vuota al nuovo documento con le stesse dimensioni della pagina originale
+        //const newPage = newPdfDoc.addPage([page.view[2], page.view[3]]);
+
+        // Ottieni i disegni per questa pagina
+        const pageDrawings = drawings.get(pageNum);
+
+        // Disegna il contenuto della pagina originale
+        const content = await page.getOperatorList();
+        //newPage.addPage(content);
+
+        // Aggiungi i disegni alla pagina
+        if (pageDrawings) {
+          for (const segment of pageDrawings) {
+            const color = segment.color || '#000000'; // Colore predefinito se non specificato
+            const width = segment.width || 2; // Larghezza predefinita se non specificata
+            for (let i = 0; i < segment.points.length; i++) {
+              const point = segment.points[i];
+              if (i === 0) {
+                //newPage.moveTo(point.x, point.y);
+              } else {
+                //newPage.lineTo(point.x, point.y);
+              }
+              //newPage.setStrokeColor(new pdfjsLib.PDFColor({ rgb: [color, color, color] }));
+              //newPage.setLineWidth(width);
+            }
+          }
+        }
+      }
+
+      // Genera un blob dal nuovo documento PDF
+      //const pdfData = await newPdfDoc.save();
+
+      // Crea un oggetto Blob
+      //const blob = new Blob([pdfData], { type: 'application/pdf' });
+
+      // Scarica il nuovo PDF
+      //saveAs(blob, 'modified_pdf.pdf');
+    } catch (error) {
+      console.error('Error creating modified PDF:', error);
+    }
+  }
+
+  private readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target && event.target.result) {
+          resolve(event.target.result as ArrayBuffer);
+        } else {
+          reject(new Error('Failed to read file as ArrayBuffer.'));
+        }
+      };
+      reader.onerror = (event) => {
+        reject(new Error('Error reading file: ' + event.target?.error));
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
 
   // Aggiungi questa funzione al tuo componente
-  drawPoint(point: Point, color: string, width: number) {
+  drawLine(line: Segment) {
     if (!this.ctx) return;
   
     this.ctx.beginPath();
-    this.ctx.arc(point.x, point.y, width / 2, 0, 2 * Math.PI);
-    this.ctx.fillStyle = color;
-    this.ctx.fill();
+    this.ctx.strokeStyle = line.color;
+    this.ctx.lineWidth = line.width;
+  
+    for (let i = 0; i < line.points.length; ++i) {
+      const point = line.points[i];
+  
+      if (i === 0) {
+        this.ctx.moveTo(point.x, point.y); // Muoviti al primo punto
+      } else {
+        const previousPoint = line.points[i - 1];
+        this.ctx.lineTo(point.x, point.y); // Traccia una linea al punto successivo
+      }
+    }
+  
+    this.ctx.stroke(); // Rendi visibile la linea
+    this.ctx.closePath();
   }
 
   // Select color

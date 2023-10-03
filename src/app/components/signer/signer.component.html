@@ -5,6 +5,7 @@
       </div>
       <div class="col-md-4">
         <input type="color" [(ngModel)]="selectedColor">
+        <input type="number"[(ngModel)]="selectedWidth" step="0.1">
         <div class="btn-group mb-3">
           <button class="btn btn-secondary" (click)="goToPreviousPage()">Previous Page</button>
           <button class="btn btn-secondary" (click)="goToNextPage()">Next Page</button>
