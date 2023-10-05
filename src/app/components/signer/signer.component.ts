@@ -1,6 +1,5 @@
 import { Component, ElementRef, Input, OnChanges, ViewChild } from '@angular/core';
 import * as pdfjsLib from 'pdfjs-dist';
-import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
 
 type Point = { x: number, y: number };
@@ -22,8 +21,8 @@ export class SignerComponent implements OnChanges {
   drawing = false;
   lastX = 0;
   lastY = 0;
-  selectedColor = '#000000'; // Default color is black
-  selectedWidth = 2; // Default width is 2
+  selectedColor = '#000000';
+  selectedWidth = 2; 
   segments = new Map<number, Segment[]>()
 
   currentSegment: Point[] = []
@@ -44,7 +43,7 @@ export class SignerComponent implements OnChanges {
     fileReader.onload = async () => {
       const typedArray = new Uint8Array(fileReader.result as ArrayBuffer);
       this.pdfDoc = await pdfjsLib.getDocument({ data: typedArray }).promise;
-      this.currentPage = 1; // Reset current page to the first page
+      this.currentPage = 1;
       this.renderPage(this.currentPage);
     };
 
@@ -65,7 +64,7 @@ export class SignerComponent implements OnChanges {
       this.canvas!.width = viewport.width;
 
       page.render({ canvasContext: this.ctx!, viewport }).promise.then(() => {
-        // Ripristina i disegni della pagina corrente
+
         const currPageLines = this.segments.get(pageNumber);
         if (currPageLines) {
           currPageLines.forEach(line => this.drawLine(line))
@@ -90,7 +89,6 @@ export class SignerComponent implements OnChanges {
     }
   }
 
-  // Start drawing
   startDrawing(event: MouseEvent) {
     this.currentSegment = []
     this.drawing = true;
@@ -107,21 +105,17 @@ export class SignerComponent implements OnChanges {
   draw(event: MouseEvent) {
     if (!this.drawing) return;
 
-    
-    //usa il colore selezionato per disegnare
     this.ctx!.globalCompositeOperation = 'source-over';
     this.ctx!.strokeStyle = this.selectedColor;
-    this.ctx!.lineWidth = this.selectedWidth; // Imposta la larghezza del tratto
+    this.ctx!.lineWidth = this.selectedWidth;
   
-    // Disegna il tratto
     const x = event.offsetX;
     const y = event.offsetY;
   
-    // Calcola la distanza tra il punto corrente e l'ultimo punto registrato
     const dx = x - this.lastX;
     const dy = y - this.lastY;
     const distance = Math.sqrt(dx * dx + dy * dy);
-    // Registra i punti ad ogni pixel di distanza
+
     if (distance >= 2) {
       const step = 1 / distance;
       for (let t = 0; t < 1; t += step) {
@@ -139,7 +133,6 @@ export class SignerComponent implements OnChanges {
     }
   }
 
-  // Stop drawing
   endDrawing() {
     this.drawing = false;
     this.ctx!.closePath();
@@ -161,7 +154,6 @@ export class SignerComponent implements OnChanges {
     }
   }
 
-  // Aggiungi questa funzione al tuo componente
   drawLine(line: Segment) {
     if (!this.ctx) return;
   
@@ -173,18 +165,17 @@ export class SignerComponent implements OnChanges {
       const point = line.points[i];
   
       if (i === 0) {
-        this.ctx.moveTo(point.x, point.y); // Muoviti al primo punto
+        this.ctx.moveTo(point.x, point.y);
       } else {
         const previousPoint = line.points[i - 1];
-        this.ctx.lineTo(point.x, point.y); // Traccia una linea al punto successivo
+        this.ctx.lineTo(point.x, point.y); 
       }
     }
   
-    this.ctx.stroke(); // Rendi visibile la linea
+    this.ctx.stroke(); 
     this.ctx.closePath();
   }
 
-  // Select color
   selectColor(color: string) {
     this.selectedColor = color;
   }
@@ -208,7 +199,6 @@ export class SignerComponent implements OnChanges {
       const page = await this.pdfDoc.getPage(pageNumber);
       const viewport = page.getViewport({ scale: scaleFactor });
   
-      // Imposta le dimensioni del canvas in base alle dimensioni della pagina
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d')!;
       canvas.width = viewport.width;
@@ -218,7 +208,6 @@ export class SignerComponent implements OnChanges {
       // Converti l'immagine della pagina in un'immagine data URL
       const imageDataUrl = canvas.toDataURL('image/jpeg');
   
-      // Aggiungi l'immagine al PDF in modo che occupi l'intera pagina
       pdf.addImage(
         imageDataUrl,
         'JPEG',
@@ -228,7 +217,6 @@ export class SignerComponent implements OnChanges {
         pdf.internal.pageSize.getHeight()
       );
   
-      // Aggiungi i disegni alla pagina corrente
       const pageSegments = this.segments.get(pageNumber);
       if (pageSegments) {
         for (const segment of pageSegments) {
@@ -236,13 +224,11 @@ export class SignerComponent implements OnChanges {
         }
       }
   
-      // Aggiungi una nuova pagina se non è l'ultima pagina
       if (pageNumber < this.pdfDoc.numPages) {
         pdf.addPage();
       }
     }
   
-    // Salva il PDF come file scaricabile
     pdf.save(this.pdfToSign.name);
   }
   
@@ -255,8 +241,7 @@ export class SignerComponent implements OnChanges {
       const x = point.x * scaleFactor;
       const y = point.y * scaleFactor;
       const circleRadius = segment.width * scaleFactor;
-  
-      // Disegna un cerchio colorato sulla pagina PDF
+      
       pdf.setFillColor(segment.color);
       pdf.circle(x, y, circleRadius, 'F');
     }
