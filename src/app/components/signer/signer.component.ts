@@ -200,68 +200,62 @@ export class SignerComponent implements OnChanges {
 
   async downloadPDF() {
     if (!this.pdfDoc) return;
-
+  
     const pdf = new jsPDF();
     const scaleFactor = 1; // Manteniamo la scala originale
-
+  
     for (let pageNumber = 1; pageNumber <= this.pdfDoc.numPages; pageNumber++) {
       const page = await this.pdfDoc.getPage(pageNumber);
       const viewport = page.getViewport({ scale: scaleFactor });
-
+  
       // Imposta le dimensioni del canvas in base alle dimensioni della pagina
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d')!;
       canvas.width = viewport.width;
       canvas.height = viewport.height;
       await page.render({ canvasContext: context, viewport }).promise;
-
+  
       // Converti l'immagine della pagina in un'immagine data URL
       const imageDataUrl = canvas.toDataURL('image/jpeg');
-
-      // Calcola le dimensioni dell'immagine mantenendo la scala originale
-      const width = viewport.width / 4; // Modifica il fattore di scala se necessario
-      const height = viewport.height / 4; // Modifica il fattore di scala se necessario
-
-      // Aggiungi l'immagine al PDF mantenendo le dimensioni originali
+  
+      // Aggiungi l'immagine al PDF in modo che occupi l'intera pagina
       pdf.addImage(
         imageDataUrl,
         'JPEG',
         0, // x
         0, // y
-        width, // larghezza
-        height // altezza
+        pdf.internal.pageSize.getWidth(),
+        pdf.internal.pageSize.getHeight()
       );
-
+  
       // Aggiungi i disegni alla pagina corrente
       const pageSegments = this.segments.get(pageNumber);
       if (pageSegments) {
         for (const segment of pageSegments) {
-          this.drawSegmentOnPage(pdf, segment, scaleFactor, width, height);
+          this.drawSegmentOnPage(pdf, segment, scaleFactor);
         }
       }
-
+  
       // Aggiungi una nuova pagina se non è l'ultima pagina
       if (pageNumber < this.pdfDoc.numPages) {
         pdf.addPage();
       }
     }
-
+  
     // Salva il PDF come file scaricabile
     pdf.save(this.pdfToSign.name);
   }
-
+  
   private drawSegmentOnPage(
     pdf: jsPDF,
     segment: Segment,
-    scaleFactor: number,
-    width: number,
-    height: number
+    scaleFactor: number
   ) {
     for (const point of segment.points) {
-      const x = (point.x * scaleFactor * width) / 4; // Modifica il fattore di scala se necessario
-      const y = (point.y * scaleFactor * height) / 4; // Modifica il fattore di scala se necessario
-      const circleRadius = (segment.width * scaleFactor) / 4; // Modifica il fattore di scala se necessario
-
+      const x = point.x * scaleFactor;
+      const y = point.y * scaleFactor;
+      const circleRadius = segment.width * scaleFactor;
+  
       // Disegna un cerchio colorato sulla pagina PDF
       pdf.setFillColor(segment.color);
       pdf.circle(x, y, circleRadius, 'F');
