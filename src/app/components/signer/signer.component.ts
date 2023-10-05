@@ -1,6 +1,7 @@
 import { Component, ElementRef, Input, OnChanges, ViewChild } from '@angular/core';
 import * as pdfjsLib from 'pdfjs-dist';
 import { saveAs } from 'file-saver';
+import jsPDF from 'jspdf';
 
 type Point = { x: number, y: number };
 type Segment = { points: Point[], color: string, width: number };
@@ -159,79 +160,6 @@ export class SignerComponent implements OnChanges {
       this.endDrawing()
     }
   }
-  
-  async createModifiedPdf(originalPdfFile: File, drawings: Map<number, Segment[]>): Promise<void> {
-    try {
-      // Carica il PDF originale
-      const originalPdfData = await this.readFileAsArrayBuffer(originalPdfFile);
-      const pdfDoc = await pdfjsLib.getDocument({ data: originalPdfData }).promise;
-
-      // Crea un nuovo documento PDF
-      //const newPdfDoc = new pdfjsLib.PDFDocument();
-
-      // Per ogni pagina del PDF originale
-      for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
-        const page = await pdfDoc.getPage(pageNum);
-
-        // Aggiungi una pagina vuota al nuovo documento con le stesse dimensioni della pagina originale
-        //const newPage = newPdfDoc.addPage([page.view[2], page.view[3]]);
-
-        // Ottieni i disegni per questa pagina
-        const pageDrawings = drawings.get(pageNum);
-
-        // Disegna il contenuto della pagina originale
-        const content = await page.getOperatorList();
-        //newPage.addPage(content);
-
-        // Aggiungi i disegni alla pagina
-        if (pageDrawings) {
-          for (const segment of pageDrawings) {
-            const color = segment.color || '#000000'; // Colore predefinito se non specificato
-            const width = segment.width || 2; // Larghezza predefinita se non specificata
-            for (let i = 0; i < segment.points.length; i++) {
-              const point = segment.points[i];
-              if (i === 0) {
-                //newPage.moveTo(point.x, point.y);
-              } else {
-                //newPage.lineTo(point.x, point.y);
-              }
-              //newPage.setStrokeColor(new pdfjsLib.PDFColor({ rgb: [color, color, color] }));
-              //newPage.setLineWidth(width);
-            }
-          }
-        }
-      }
-
-      // Genera un blob dal nuovo documento PDF
-      //const pdfData = await newPdfDoc.save();
-
-      // Crea un oggetto Blob
-      //const blob = new Blob([pdfData], { type: 'application/pdf' });
-
-      // Scarica il nuovo PDF
-      //saveAs(blob, 'modified_pdf.pdf');
-    } catch (error) {
-      console.error('Error creating modified PDF:', error);
-    }
-  }
-
-  private readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target && event.target.result) {
-          resolve(event.target.result as ArrayBuffer);
-        } else {
-          reject(new Error('Failed to read file as ArrayBuffer.'));
-        }
-      };
-      reader.onerror = (event) => {
-        reject(new Error('Error reading file: ' + event.target?.error));
-      };
-      reader.readAsArrayBuffer(file);
-    });
-  }
-
 
   // Aggiungi questa funzione al tuo componente
   drawLine(line: Segment) {
@@ -270,7 +198,73 @@ export class SignerComponent implements OnChanges {
     }
   }
 
-  downloadModifiedPDF() {
-    // Implement logic to download the modified PDF
+  async downloadPDF() {
+    if (!this.pdfDoc) return;
+
+    const pdf = new jsPDF();
+    const scaleFactor = 1; // Manteniamo la scala originale
+
+    for (let pageNumber = 1; pageNumber <= this.pdfDoc.numPages; pageNumber++) {
+      const page = await this.pdfDoc.getPage(pageNumber);
+      const viewport = page.getViewport({ scale: scaleFactor });
+
+      // Imposta le dimensioni del canvas in base alle dimensioni della pagina
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d')!;
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: context, viewport }).promise;
+
+      // Converti l'immagine della pagina in un'immagine data URL
+      const imageDataUrl = canvas.toDataURL('image/jpeg');
+
+      // Calcola le dimensioni dell'immagine mantenendo la scala originale
+      const width = viewport.width / 4; // Modifica il fattore di scala se necessario
+      const height = viewport.height / 4; // Modifica il fattore di scala se necessario
+
+      // Aggiungi l'immagine al PDF mantenendo le dimensioni originali
+      pdf.addImage(
+        imageDataUrl,
+        'JPEG',
+        0, // x
+        0, // y
+        width, // larghezza
+        height // altezza
+      );
+
+      // Aggiungi i disegni alla pagina corrente
+      const pageSegments = this.segments.get(pageNumber);
+      if (pageSegments) {
+        for (const segment of pageSegments) {
+          this.drawSegmentOnPage(pdf, segment, scaleFactor, width, height);
+        }
+      }
+
+      // Aggiungi una nuova pagina se non è l'ultima pagina
+      if (pageNumber < this.pdfDoc.numPages) {
+        pdf.addPage();
+      }
+    }
+
+    // Salva il PDF come file scaricabile
+    pdf.save(this.pdfToSign.name);
+  }
+
+  private drawSegmentOnPage(
+    pdf: jsPDF,
+    segment: Segment,
+    scaleFactor: number,
+    width: number,
+    height: number
+  ) {
+    for (const point of segment.points) {
+      const x = (point.x * scaleFactor * width) / 4; // Modifica il fattore di scala se necessario
+      const y = (point.y * scaleFactor * height) / 4; // Modifica il fattore di scala se necessario
+      const circleRadius = (segment.width * scaleFactor) / 4; // Modifica il fattore di scala se necessario
+
+      // Disegna un cerchio colorato sulla pagina PDF
+      pdf.setFillColor(segment.color);
+      pdf.circle(x, y, circleRadius, 'F');
+    }
   }
 }
