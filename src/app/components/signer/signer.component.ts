@@ -206,11 +206,11 @@ export class SignerComponent implements OnChanges {
       await page.render({ canvasContext: context, viewport }).promise;
   
       // Converti l'immagine della pagina in un'immagine data URL
-      const imageDataUrl = canvas.toDataURL('image/jpeg');
+      const imageDataUrl = canvas.toDataURL('image/png');
   
       pdf.addImage(
         imageDataUrl,
-        'JPEG',
+        'PNG',
         0, // x
         0, // y
         pdf.internal.pageSize.getWidth(),
