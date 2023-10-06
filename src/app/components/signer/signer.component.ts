@@ -220,7 +220,7 @@ export class SignerComponent implements OnChanges {
       const pageSegments = this.segments.get(pageNumber);
       if (pageSegments) {
         for (const segment of pageSegments) {
-          this.drawSegmentOnPage(pdf, segment, scaleFactor);
+          this.drawSegmentOnPage(pdf, segment, scaleFactor, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight());
         }
       }
   
@@ -235,12 +235,15 @@ export class SignerComponent implements OnChanges {
   private drawSegmentOnPage(
     pdf: jsPDF,
     segment: Segment,
-    scaleFactor: number
+    scaleFactor: number,
+    pageWidth: number,
+    pageHeight: number
   ) {
     for (const point of segment.points) {
-      const x = point.x * scaleFactor;
-      const y = point.y * scaleFactor;
-      const circleRadius = segment.width * scaleFactor;
+      // Calcola le nuove coordinate basate sulle dimensioni della pagina PDF
+      const x = (point.x / this.canvas!.width) * pageWidth;
+      const y = (point.y / this.canvas!.height) * pageHeight;
+      const circleRadius = (segment.width * scaleFactor) / 2;
       
       pdf.setFillColor(segment.color);
       pdf.circle(x, y, circleRadius, 'F');
