@@ -22,8 +22,14 @@ export class SignerComponent implements OnChanges {
   lastX = 0;
   lastY = 0;
   selectedColor = '#000000';
-  selectedWidth = 2; 
+  selectedWidth = 2;
   segments = new Map<number, Segment[]>()
+
+
+  currentText = '';
+  textObjects: any[] = [];
+  addingText = false
+  draggingText = false
 
   currentSegment: Point[] = []
 
@@ -36,6 +42,36 @@ export class SignerComponent implements OnChanges {
       this.loadPDF();
     }
   }
+
+  stopDragging() {
+    if (this.draggingText) {
+      console.log('end drag')
+      this.draggingText = false;
+    }
+  }
+
+  startDragging() {
+    this.draggingText = true
+
+  }
+
+  allowDrop(event: DragEvent) {
+    event.preventDefault();
+  }
+
+  addText(event: MouseEvent) {
+    if (this.addingText && this.ctx) {
+      const canvasRect = this.pdfCanvas.nativeElement.getBoundingClientRect();
+      const x = event.clientX - canvasRect.left;
+      const y = event.clientY - canvasRect.top;
+      this.ctx.fillStyle = this.selectedColor;
+      this.ctx.font = `${this.selectedWidth + 10}px Arial`;
+      this.ctx.fillText(this.currentText, x, y);
+      this.textObjects.push({ text: this.currentText, x: x, y: y, color: this.selectedColor, width: this.selectedWidth, pageNumber: this.currentPage });
+      this.currentText = '';
+    }
+  }
+
 
   async loadPDF() {
     const fileReader = new FileReader();
@@ -108,10 +144,10 @@ export class SignerComponent implements OnChanges {
     this.ctx!.globalCompositeOperation = 'source-over';
     this.ctx!.strokeStyle = this.selectedColor;
     this.ctx!.lineWidth = this.selectedWidth;
-  
+
     const x = event.offsetX;
     const y = event.offsetY;
-  
+
     const dx = x - this.lastX;
     const dy = y - this.lastY;
     const distance = Math.sqrt(dx * dx + dy * dy);
@@ -156,23 +192,23 @@ export class SignerComponent implements OnChanges {
 
   drawLine(line: Segment) {
     if (!this.ctx) return;
-  
+
     this.ctx.beginPath();
     this.ctx.strokeStyle = line.color;
     this.ctx.lineWidth = line.width;
-  
+
     for (let i = 0; i < line.points.length; ++i) {
       const point = line.points[i];
-  
+
       if (i === 0) {
         this.ctx.moveTo(point.x, point.y);
       } else {
         const previousPoint = line.points[i - 1];
-        this.ctx.lineTo(point.x, point.y); 
+        this.ctx.lineTo(point.x, point.y);
       }
     }
-  
-    this.ctx.stroke(); 
+
+    this.ctx.stroke();
     this.ctx.closePath();
   }
 
@@ -191,23 +227,23 @@ export class SignerComponent implements OnChanges {
 
   async downloadPDF() {
     if (!this.pdfDoc) return;
-  
+
     const pdf = new jsPDF();
     const scaleFactor = 1; // Manteniamo la scala originale
-  
+
     for (let pageNumber = 1; pageNumber <= this.pdfDoc.numPages; pageNumber++) {
       const page = await this.pdfDoc.getPage(pageNumber);
       const viewport = page.getViewport({ scale: scaleFactor });
-  
+
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d')!;
       canvas.width = viewport.width;
       canvas.height = viewport.height;
       await page.render({ canvasContext: context, viewport }).promise;
-  
+
       // Converti l'immagine della pagina in un'immagine data URL
       const imageDataUrl = canvas.toDataURL('image/png');
-  
+
       pdf.addImage(
         imageDataUrl,
         'PNG',
@@ -216,22 +252,22 @@ export class SignerComponent implements OnChanges {
         pdf.internal.pageSize.getWidth(),
         pdf.internal.pageSize.getHeight()
       );
-  
+
       const pageSegments = this.segments.get(pageNumber);
       if (pageSegments) {
         for (const segment of pageSegments) {
           this.drawSegmentOnPage(pdf, segment, scaleFactor, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight());
         }
       }
-  
+
       if (pageNumber < this.pdfDoc.numPages) {
         pdf.addPage();
       }
     }
-  
+
     pdf.save(this.pdfToSign.name);
   }
-  
+
   private drawSegmentOnPage(
     pdf: jsPDF,
     segment: Segment,
@@ -244,7 +280,7 @@ export class SignerComponent implements OnChanges {
       const x = (point.x / this.canvas!.width) * pageWidth;
       const y = (point.y / this.canvas!.height) * pageHeight;
       const circleRadius = (segment.width * scaleFactor) / 2;
-      
+
       pdf.setFillColor(segment.color);
       pdf.circle(x, y, circleRadius, 'F');
     }

@@ -1,7 +1,7 @@
 <div class="container mt-5">
     <div class="row">
       <div class="col-md-8">
-        <canvas #pdfCanvas (mousedown)="startDrawing($event)" (mousemove)="draw($event)" (mouseup)="endDrawing()" (mouseleave)="mouseLeaveCheck()"></canvas>
+        <canvas #pdfCanvas  (dragover)="allowDrop($event)" (mousedown)="startDrawing($event)" (mousemove)="draw($event)" (drop)="addText($event)" (mouseup)="endDrawing()" (mouseleave)="mouseLeaveCheck();"></canvas>
       </div>
       <div class="col-md-4">
         <input type="color" [(ngModel)]="selectedColor">
@@ -12,6 +12,11 @@
         </div>
         <button class="btn btn-danger" (click)="undoLastAction()">Undo</button>
         <button class="btn btn-success" (click)="downloadPDF()">Download PDF</button>
+
+        <!-- Aggiungi un input per il testo -->
+<input type="text" [(ngModel)]="currentText" placeholder="Inserisci il testo" *ngIf="addingText">
+<button (click)="addingText = true">Aggiungi Testo</button>
+  <span [draggable]="true" *ngIf="addText" (dragend)="stopDragging()" (dragstart)="startDragging()">{{currentText}}</span>
       </div>
     </div>
   </div>
