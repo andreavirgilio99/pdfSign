@@ -4,6 +4,7 @@ import jsPDF from 'jspdf';
 
 type Point = { x: number, y: number };
 type Segment = { points: Point[], color: string, width: number };
+type Text = { text: string, x: number, y: number, color: string, width: number }
 
 @Component({
   selector: 'app-signer',
@@ -27,7 +28,7 @@ export class SignerComponent implements OnChanges {
 
 
   currentText = '';
-  textObjects: any[] = [];
+  texts = new Map<number, Text[]>()
   addingText = false
   draggingText = false
 
@@ -45,7 +46,6 @@ export class SignerComponent implements OnChanges {
 
   stopDragging() {
     if (this.draggingText) {
-      console.log('end drag')
       this.draggingText = false;
     }
   }
@@ -62,12 +62,27 @@ export class SignerComponent implements OnChanges {
   addText(event: MouseEvent) {
     if (this.addingText && this.ctx) {
       const canvasRect = this.pdfCanvas.nativeElement.getBoundingClientRect();
-      const x = event.clientX - canvasRect.left;
-      const y = event.clientY - canvasRect.top;
+      const x = event.clientX - canvasRect.left //diminuire per andare a sinistra
+      const y = event.clientY - canvasRect.top + 20; //alzare per scendere
       this.ctx.fillStyle = this.selectedColor;
       this.ctx.font = `${this.selectedWidth + 10}px Arial`;
       this.ctx.fillText(this.currentText, x, y);
-      this.textObjects.push({ text: this.currentText, x: x, y: y, color: this.selectedColor, width: this.selectedWidth, pageNumber: this.currentPage });
+
+      const newText: Text = {
+        text: this.currentText,
+        x: x,
+        y: y,
+        color: this.selectedColor,
+        width: this.selectedWidth
+      }
+
+      if (this.texts.get(this.currentPage)) {
+        this.texts.get(this.currentPage)!.push(newText)
+      }
+      else {
+        this.texts.set(this.currentPage, [newText])
+      }
+
       this.currentText = '';
     }
   }
@@ -105,6 +120,12 @@ export class SignerComponent implements OnChanges {
         if (currPageLines) {
           currPageLines.forEach(line => this.drawLine(line))
         }
+
+        const currPageTexts = this.texts.get(this.currentPage);
+        if (currPageTexts) {
+          currPageTexts.forEach(text => this.drawText(text))
+        }
+
       }).catch(error => {
         console.error('Error rendering page:', error);
       });
@@ -203,13 +224,18 @@ export class SignerComponent implements OnChanges {
       if (i === 0) {
         this.ctx.moveTo(point.x, point.y);
       } else {
-        const previousPoint = line.points[i - 1];
         this.ctx.lineTo(point.x, point.y);
       }
     }
 
     this.ctx.stroke();
     this.ctx.closePath();
+  }
+
+  drawText(text: Text) {
+    this.ctx!.fillStyle = text.color
+    this.ctx!.font = `${text.width + 10}px Arial`;
+    this.ctx!.fillText(text.text, text.x, text.y);
   }
 
   selectColor(color: string) {
@@ -260,6 +286,13 @@ export class SignerComponent implements OnChanges {
         }
       }
 
+      const pageTexts = this.texts.get(pageNumber)
+      if (pageTexts) {
+        for (const text of pageTexts) {
+          this.drawTextOnPage(pdf, text, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight());
+        }
+      }
+
       if (pageNumber < this.pdfDoc.numPages) {
         pdf.addPage();
       }
@@ -268,7 +301,7 @@ export class SignerComponent implements OnChanges {
     pdf.save(this.pdfToSign.name);
   }
 
-  private drawSegmentOnPage(
+  drawSegmentOnPage(
     pdf: jsPDF,
     segment: Segment,
     scaleFactor: number,
@@ -284,5 +317,17 @@ export class SignerComponent implements OnChanges {
       pdf.setFillColor(segment.color);
       pdf.circle(x, y, circleRadius, 'F');
     }
+  }
+
+  drawTextOnPage(
+    pdf: jsPDF,
+    text: Text,
+    pageWidth: number,
+    pageHeight: number) {
+    const x = (text.x / this.canvas!.width) * pageWidth;
+    const y = (text.y / this.canvas!.height) * pageHeight;
+    pdf.setTextColor(text.color);
+    pdf.setFontSize(text.width + 10);
+    pdf.text(text.text, x, y);
   }
 }
